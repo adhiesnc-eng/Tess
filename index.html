@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Jadwal UGD - Adi Purnomo</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; margin: 0; padding: 0; }
+        .table-wrapper { overflow-x: auto; position: relative; border: 1px solid #e2e8f0; border-radius: 15px; max-height: 60vh; background: white; }
+        .excel-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+        .excel-table th, .excel-table td { border: 1px solid #e2e8f0; text-align: center; padding: 12px 10px; min-width: 50px; }
+
+        .sticky-name { 
+            position: sticky; left: 0; background-color: #f8fafc !important; z-index: 40 !important; 
+            min-width: 160px !important; text-align: left !important; padding-left: 15px !important;
+            font-weight: 900; text-transform: uppercase; box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        .tgl-header { background-color: #1e1b4b !important; color: white !important; font-weight: 900; position: sticky; top: 0; z-index: 30; }
+        th.sticky-name.tgl-header { z-index: 50 !important; }
+
+        /* Warna Identitas Shift */
+        .pagi { background-color: #4ade80 !important; color: white !important; }
+        .siang { background-color: #fbbf24 !important; color: white !important; }
+        .malam { background-color: #6366f1 !important; color: white !important; }
+        .poli { background-color: #ec4899 !important; color: white !important; }
+        .cuti { background-color: #ef4444 !important; color: white !important; }
+        .libur { background-color: #f1f5f9 !important; color: transparent !important; }
+
+        /* Selector Shift 2 Baris */
+        #shift-selector { 
+            display: none; position: fixed; z-index: 100; bottom: 0; left: 50%; 
+            transform: translate(-50%, 100%); width: 100%; max-width: 500px;
+            background: white; border-radius: 30px 30px 0 0; padding: 20px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.2); transition: transform 0.3s ease-out;
+        }
+        #shift-selector.show { display: block; transform: translate(-50%, 0); }
+        .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 90; }
+
+        @media print {
+            .no-print, .overlay, #shift-selector { display: none !important; }
+            .table-wrapper { overflow: visible !important; max-height: none; }
+            .sticky-name { position: static !important; box-shadow: none !important; }
+            @page { size: landscape; margin: 0.5cm; }
+        }
+    </style>
+
+    <!-- PWA Settings -->
+    <meta name="theme-color" content="#3b82f6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+                
+</head>
+<body>
+
+<div id="sel-overlay" class="overlay" onclick="closeSelector()"></div>
+
+<div id="shift-selector">
+    <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-5"></div>
+    <div id="shift-options-container" class="grid grid-cols-2 gap-3">
+        </div>
+</div>
+
+<div class="max-w-[98%] mx-auto bg-white shadow-2xl rounded-3xl overflow-hidden my-4">
+    <div class="no-print p-4 bg-indigo-900 text-white flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <select id="range-picker" onchange="renderJadwal()" class="bg-white/10 border border-white/20 rounded-xl px-4 py-2 text-xs font-black outline-none focus:bg-white focus:text-indigo-900 transition-all">
+                <option value="full">Full Bulan</option>
+                <option value="w1">Minggu 1</option><option value="w2">Minggu 2</option>
+                <option value="w3">Minggu 3</option><option value="w4">Minggu 4</option>
+            </select>
+            <button onclick="saveAsPhoto()" class="bg-amber-500 px-6 py-2 rounded-xl text-xs font-black shadow-lg transform active:scale-90">📸 SIMPAN FOTO</button>
+        </div>
+        <div class="flex gap-2">
+            <input type="text" id="in-nama" placeholder="Nama..." class="bg-white/10 border border-white/20 px-3 py-2 rounded-xl text-xs text-white placeholder:text-white/40 font-bold w-28">
+            <button onclick="addOfficer()" class="bg-green-500 px-4 py-2 rounded-xl text-[10px] font-black uppercase">+ NAMA</button>
+        </div>
+    </div>
+
+    <div id="capture-area" class="p-4 bg-white">
+        <div class="text-center mb-6">
+            <h2 id="judul-bulan" class="text-3xl font-black uppercase italic text-indigo-900 leading-none">JADWAL SHIFT PERAWAT</h2>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.4em] mt-2">UPTD PUSKESMAS SAMPANAHAN</p>
+        </div>
+        <div class="table-wrapper"><div id="table-render-point"></div></div>
+        <div class="mt-6 flex flex-wrap justify-center gap-4 border-t pt-4">
+            <div class="flex items-center gap-1"><div class="w-3 h-3 pagi rounded"></div><span class="text-[8px] font-black uppercase">Pagi</span></div>
+            <div class="flex items-center gap-1"><div class="w-3 h-3 siang rounded"></div><span class="text-[8px] font-black uppercase">Siang</span></div>
+            <div class="flex items-center gap-1"><div class="w-3 h-3 malam rounded"></div><span class="text-[8px] font-black uppercase">Malam</span></div>
+            <div class="flex items-center gap-1"><div class="w-3 h-3 poli rounded"></div><span class="text-[8px] font-black uppercase">Poli</span></div>
+            <div class="flex items-center gap-1"><div class="w-3 h-3 cuti rounded"></div><span class="text-[8px] font-black uppercase">Cuti</span></div>
+        </div>
+    </div>
+
+    <div class="no-print p-6 flex justify-center gap-4 bg-white border-t">
+        <button id="btn-edit" onclick="toggleEditMode()" class="bg-indigo-600 text-white px-12 py-4 rounded-2xl font-black text-xs shadow-xl transition-all">📝 EDIT JADWAL</button>
+    </div>
+</div>
+
+<script>
+    let isEditMode = false;
+    let currentCell = { name: null, day: null };
+    let officers = ["Adi Purnomo", "Hafiyyah", "Haidir"];
+    let schedule = {};
+
+    // Data Shift
+    let shiftMenu = [
+        { code: 'P', name: 'PAGI', time: '08-14', class: 'pagi' },
+        { code: 'S', name: 'SIANG', time: '14-20', class: 'siang' },
+        { code: 'M', name: 'MALAM', time: '20-08', class: 'malam' },
+        { code: 'Poli', name: 'POLI', time: '08-14', class: 'poli' },
+        { code: 'C', name: 'CUTI', time: 'CUTI', class: 'cuti' },
+        { code: 'L', name: 'LIBUR', time: 'OFF', class: 'libur' }
+    ];
+
+    function addOfficer() {
+        const name = document.getElementById('in-nama').value.trim();
+        if(name && !officers.includes(name)) { officers.push(name); renderJadwal(); }
+    }
+
+    function renderJadwal() {
+        const range = document.getElementById('range-picker').value;
+        const now = new Date();
+        const monthYear = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+        const maxDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        document.getElementById('judul-bulan').innerText = `JADWAL SHIFT - ${monthYear}`;
+
+        let start = 1, end = maxDays;
+        if(range === 'w1') { start = 1; end = 7; }
+        else if(range === 'w2') { start = 8; end = 14; }
+        else if(range === 'w3') { start = 15; end = 21; }
+        else if(range === 'w4') { start = 22; end = 28; }
+
+        let html = `<table id="main-table" class="excel-table">
+            <thead><tr><th class="sticky-name tgl-header">NAMA PETUGAS</th>`;
+        for (let t = start; t <= end; t++) { html += `<th class="tgl-header">${t}</th>`; }
+        html += `</tr></thead><tbody>`;
+
+        officers.forEach(name => {
+            if(!schedule[name]) schedule[name] = {};
+            html += `<tr><td class="sticky-name">${name}</td>`;
+            for (let t = start; t <= end; t++) {
+                const s = schedule[name][t] || 'L';
+                const sData = shiftMenu.find(item => item.code === s);
+                const bgClass = sData ? sData.class : 'libur';
+                const text = s === 'L' ? '' : s;
+                html += `<td class="${bgClass} font-black text-[10px] cursor-pointer" onclick="openSelector('${name}', ${t})">${text}</td>`;
+            }
+            html += `</tr>`;
+        });
+        document.getElementById('table-render-point').innerHTML = html + `</tbody></table>`;
+        renderShiftSelector();
+    }
+
+    function renderShiftSelector() {
+        let html = "";
+        shiftMenu.forEach(item => {
+            html += `<button onclick="applyShift('${item.code}')" class="flex flex-col items-center justify-center p-3 ${item.class} rounded-2xl shadow active:scale-95 transition-all h-20">
+                <span class="font-black text-xs italic">${item.name}</span>
+                <span class="text-[8px] font-bold opacity-70 mt-1">${item.time}</span>
+            </button>`;
+        });
+        document.getElementById('shift-options-container').innerHTML = html;
+    }
+
+    function openSelector(name, day) {
+        if(!isEditMode) return;
+        currentCell = { name, day };
+        document.getElementById('sel-overlay').style.display = 'block';
+        document.getElementById('shift-selector').classList.add('show');
+    }
+
+    function closeSelector() {
+        document.getElementById('sel-overlay').style.display = 'none';
+        document.getElementById('shift-selector').classList.remove('show');
+    }
+
+    function applyShift(val) {
+        if(currentCell.name) {
+            schedule[currentCell.name][currentCell.day] = val;
+            renderJadwal();
+            closeSelector();
+        }
+    }
+
+    function toggleEditMode() {
+        isEditMode = !isEditMode;
+        document.getElementById('btn-edit').innerText = isEditMode ? "❌ SELESAI" : "📝 EDIT JADWAL";
+        renderJadwal();
+    }
+
+    async function saveAsPhoto() {
+        const area = document.getElementById('capture-area');
+        const scrollContainer = document.querySelector('.table-wrapper');
+        const table = document.getElementById('main-table');
+        const originalOverflow = scrollContainer.style.overflowX;
+        scrollContainer.style.overflowX = 'visible';
+        area.style.width = table.offsetWidth + 60 + 'px';
+
+        const canvas = await html2canvas(area, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+        const link = document.createElement('a');
+        link.download = `Jadwal_UGD_Sampanahan.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        
+        scrollContainer.style.overflowX = originalOverflow;
+        area.style.width = "auto";
+    }
+
+    renderJadwal();
+</script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('PWA: Service Worker Registered'))
+            .catch(err => console.log('PWA: Service Worker Failed', err));
+        });
+      }
+    </script>
+                
+</body>
+</html>
